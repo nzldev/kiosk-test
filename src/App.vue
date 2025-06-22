@@ -296,6 +296,64 @@ const scanPrinters = async () => {
   }
 }
 
+// Scan for USB printers
+const scanUSBPrinters = async () => {
+  try {
+    if (!navigator.usb) {
+      throw new Error('USB not supported')
+    }
+    
+    const device = await navigator.usb.requestDevice({
+      filters: [
+        { classCode: 7 }, // Printer class
+        { vendorId: 0x04b8 }, // Epson
+        { vendorId: 0x04da }, // Panasonic
+        { vendorId: 0x0483 }  // STMicroelectronics
+      ]
+    })
+    
+    return {
+      id: device.serialNumber || Math.random().toString(36),
+      name: device.productName || 'USB Thermal Printer',
+      type: 'usb',
+      device: device
+    }
+  } catch (error) {
+    console.error('USB scan error:', error)
+    throw error
+  }
+}
+
+
+// Scan for Bluetooth printers
+const scanBluetoothPrinters = async () => {
+  try {
+    if (!navigator.bluetooth) {
+      throw new Error('Bluetooth not supported')
+    }
+    
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [
+        { services: ['000018f0-0000-1000-8000-00805f9b34fb'] }, // Print service
+        { namePrefix: 'POS' },
+        { namePrefix: 'Thermal' },
+        { namePrefix: 'Receipt' }
+      ],
+      optionalServices: ['battery_service']
+    })
+    
+    return {
+      id: device.id,
+      name: device.name || 'Unknown Bluetooth Printer',
+      type: 'bluetooth',
+      device: device
+    }
+  } catch (error) {
+    console.error('Bluetooth scan error:', error)
+    throw error
+  }
+}
+
 
 const testIPPrinter = async (address, port) => {
   return new Promise((resolve, reject) => {
