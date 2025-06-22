@@ -296,21 +296,40 @@ const scanPrinters = async () => {
   }
 }
 
+const checkUSBSupport = () => {
+  return 'usb' in navigator && 'requestDevice' in navigator.usb;
+}
+const RONGTA_VENDOR_IDS = [
+  0x0fe6, // Common for Chinese thermal printers
+  0x0483, // STMicroelectronics (often used in thermal printers)
+  0x1a86, // QinHeng Electronics (CH340 chip commonly used)
+  0x067b, // Prolific (USB-to-Serial chips)
+  0x10c4, // Silicon Labs (CP210x USB-to-UART chips)
+  0x0403  // FTDI (FT232 USB-to-Serial chips)
+];
 // Scan for USB printers
 const scanUSBPrinters = async () => {
   try {
-    if (!navigator.usb) {
-      throw new Error('USB not supported')
+    if (!checkUSBSupport()) {
+      // throw new Error('WebUSB API not supported in this browser');
+      showNotification('WebUSB API not supported in this browser');
+      return;
     }
     
-    const device = await navigator.usb.requestDevice({
-      filters: [
-        { classCode: 7 }, // Printer class
-        { vendorId: 0x04b8 }, // Epson
-        { vendorId: 0x04da }, // Panasonic
-        { vendorId: 0x0483 }  // STMicroelectronics
-      ]
-    })
+    const filters = [
+      { classCode: 7 }, // Printer class
+      ...RONGTA_VENDOR_IDS.map(vendorId => ({ vendorId })),
+      // Add any specific product names if known
+      { vendorId: 0x0fe6, productId: 0x811e }, // Common thermal printer combo
+       { vendorId: 0x04b8 }, // Epson
+        { vendorId: 0x04da }, // Panasonic  
+        { vendorId: 0x0483 }, // STMicroelectronics
+        { vendorId: 0x067b }, // Prolific
+        { vendorId: 0x0525 }  // Netchip Technology
+    ];
+     const device = await navigator.usb.requestDevice({
+      filters:  filters
+    });
     
     return {
       id: device.serialNumber || Math.random().toString(36),
@@ -319,6 +338,7 @@ const scanUSBPrinters = async () => {
       device: device
     }
   } catch (error) {
+     showNotification( 'USB scan error:', error);
     console.error('USB scan error:', error)
     throw error
   }
