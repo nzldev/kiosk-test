@@ -1,175 +1,218 @@
- <!-- components/thermalPrinterConfigModal.vue -->
+<!-- ThermalPrinterConfigModal.vue -->
 <template>
-  <div v-if="visible" class="modal-overlay">
-    <div class="modal-content">
+  <div v-if="visible" class="modal-overlay" @click="closeModal">
+    <div class="modal-content" @click.stop>
       <div class="modal-header">
-        <h2>Configure Thermal Printer</h2>
-        <button class="close-btn" @click="$emit('close')">&times;</button>
+        <h3>Configure Thermal Printer</h3>
+        <button class="close-btn" @click="closeModal">✕</button>
       </div>
-      
+
       <div class="modal-body">
         <!-- Connection Type Selection -->
-        <div class="connection-type-section">
-          <h3>Select Connection Type</h3>
-          <div class="connection-options">
-            <label class="connection-option">
-              <input 
-                type="radio" 
-                value="bluetooth" 
-                :checked="connectionType === 'bluetooth'"
-                @change="$emit('update-connection-type', 'bluetooth')"
-                :disabled="!bluetoothSupported"
-              />
-              <span class="option-icon">📶</span>
-              <span>Bluetooth</span>
-              <small v-if="!bluetoothSupported" class="not-supported">(Not Supported)</small>
-            </label>
-            
-            <label class="connection-option">
-              <input 
-                type="radio" 
-                value="usb" 
-                :checked="connectionType === 'usb'"
-                @change="$emit('update-connection-type', 'usb')"
-                :disabled="!usbSupported"
-              />
-              <span class="option-icon">🔌</span>
-              <span>USB</span>
-              <small v-if="!usbSupported" class="not-supported">(Not Supported)</small>
-            </label>
-            
-            <label class="connection-option">
-              <input 
-                type="radio" 
-                value="ip" 
-                :checked="connectionType === 'ip'"
-                @change="$emit('update-connection-type', 'ip')"
-              />
-              <span class="option-icon">🌐</span>
-              <span>Network/IP</span>
-              <small class="recommended">(Recommended)</small>
-            </label>
-
-            <!-- <label class="connection-option">
-              <input 
-                type="radio" 
-                value="serial" 
-                :checked="connectionType === 'serial'"
-                @change="$emit('update-connection-type', 'serial')"
-                :disabled="!serialSupported"
-              />
-              <span class="option-icon">⚡</span>
-              <span>Serial Port</span>
-              <small v-if="!serialSupported" class="not-supported">(Not Supported)</small>
-            </label> -->
-          </div>
-        </div>
-
-        <!-- IP Configuration (shown only for IP connection) -->
-        <div v-if="connectionType === 'ip'" class="ip-config-section">
-          <h3>Network Printer Configuration</h3>
-          <div class="ip-inputs">
-            <div class="input-group">
-              <label>IP Address:</label>
-              <input 
-                type="text" 
-                v-model="ipAddress" 
-                placeholder="192.168.1.100"
-                pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
-              />
-            </div>
-            <div class="input-group">
-              <label>Port:</label>
-              <input 
-                type="number" 
-                v-model.number="ipPort" 
-                placeholder="9100"
-                min="1"
-                max="65535"
-              />
-            </div>
+        <div class="connection-types">
+          <h4>Select Connection Type</h4>
+          <div class="type-buttons">
             <button 
-              class="test-btn" 
-              @click="testIPConnection"
-              :disabled="!ipAddress || isTestingIP"
+              v-for="type in connectionTypes" 
+              :key="type.id"
+              class="type-btn"
+              :class="{ active: connectionType === type.id }"
+              @click="selectConnectionType(type.id)"
             >
-              {{ isTestingIP ? 'Testing...' : 'Test Connection' }}
+              <span class="icon">{{ type.icon }}</span>
+              <span>{{ type.name }}</span>
             </button>
           </div>
         </div>
 
-        <!-- Scan Section -->
-        <div v-if="connectionType !== 'ip'" class="scan-section">
-          <button 
-            class="scan-btn" 
-            @click="$emit('scan-printers')"
-            :disabled="isScanning"
-          >
-            {{ isScanning ? 'Scanning...' : `Scan ${connectionType.toUpperCase()} Printers` }}
-          </button>
-        </div>
+        <!-- Bluetooth Configuration -->
+        <div v-if="connectionType === 'bluetooth'" class="config-section">
+          <h4>Bluetooth Printers</h4>
+          
+          <div class="scan-section">
+            <button 
+              class="scan-btn" 
+              @click="scanForBluetoothPrinters"
+              :disabled="isScanning"
+            >
+              <span v-if="isScanning" class="spinner-small"></span>
+              {{ isScanning ? 'Scanning...' : '🔍 Scan for Printers' }}
+            </button>
+          </div>
 
-        <!-- Available Printers -->
-        <div v-if="availablePrinters.length > 0 || ipTestResult" class="printers-section">
-          <h3>Available Printers</h3>
-          <div class="printers-list">
+          <div v-if="bluetoothPrinters.length > 0" class="printer-list">
             <div 
-              v-for="printer in displayPrinters" 
+              v-for="printer in bluetoothPrinters" 
               :key="printer.id"
               class="printer-item"
-              :class="{ 'selected': selectedPrinter?.id === printer.id }"
-              @click="$emit('select-printer', printer)"
+              :class="{ selected: selectedPrinter?.id === printer.id }"
+              @click="selectPrinter(printer)"
             >
               <div class="printer-info">
                 <div class="printer-name">{{ printer.name }}</div>
-                <div class="printer-type">{{ printer.type.toUpperCase() }}</div>
-                <div v-if="printer.address" class="printer-address">
-                  {{ printer.address }}:{{ printer.port }}
+                <div class="printer-details">
+                  <span class="printer-type">Bluetooth</span>
+                  <span v-if="printer.batteryLevel" class="battery">
+                    🔋 {{ printer.batteryLevel }}%
+                  </span>
                 </div>
               </div>
-              <div class="printer-status">
-                <span class="status-indicator" :class="printer.connected ? 'connected' : 'disconnected'">
-                  {{ printer.connected ? 'Connected' : 'Disconnected' }}
-                </span>
+              <div class="printer-actions">
+                <button 
+                  class="test-btn-small"
+                  @click.stop="testBluetoothPrinter(printer)"
+                  :disabled="testingPrinter === printer.id"
+                >
+                  {{ testingPrinter === printer.id ? '...' : 'Test' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div v-else-if="!isScanning" class="no-printers">
+            <p>No Bluetooth printers found. Make sure your printer is:</p>
+            <ul>
+              <li>Powered on and in pairing mode</li>
+              <li>Within range of your device</li>
+              <li>Compatible with Bluetooth LE</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- IP/Network Configuration -->
+        <div v-if="connectionType === 'ip'" class="config-section">
+          <h4>Network Printer Settings</h4>
+          
+          <div class="ip-config">
+            <div class="form-group">
+              <label>IP Address:</label>
+              <input 
+                v-model="ipConfig.address" 
+                type="text" 
+                placeholder="192.168.1.100"
+                pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
+              >
+            </div>
+            
+            <div class="form-group">
+              <label>Port:</label>
+              <input 
+                v-model.number="ipConfig.port" 
+                type="number" 
+                placeholder="9100"
+                min="1"
+                max="65535"
+              >
+            </div>
+            
+            <button 
+              class="test-ip-btn"
+              @click="testIPConnection"
+              :disabled="!ipConfig.address || !ipConfig.port || testingIP"
+            >
+              <span v-if="testingIP" class="spinner-small"></span>
+              {{ testingIP ? 'Testing...' : '🔗 Test Connection' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- USB Configuration -->
+        <div v-if="connectionType === 'usb'" class="config-section">
+          <h4>USB Printers</h4>
+          
+          <div class="usb-info">
+            <p>🔌 Connect your thermal printer via USB and click scan.</p>
+            <p><small>Note: Web USB requires HTTPS and user permission.</small></p>
+          </div>
+          
+          <button 
+            class="scan-btn" 
+            @click="scanForUSBPrinters"
+            :disabled="isScanning"
+          >
+            <span v-if="isScanning" class="spinner-small"></span>
+            {{ isScanning ? 'Scanning...' : '🔍 Scan USB Ports' }}
+          </button>
+
+          <div v-if="usbPrinters.length > 0" class="printer-list">
+            <div 
+              v-for="printer in usbPrinters" 
+              :key="printer.id"
+              class="printer-item"
+              :class="{ selected: selectedPrinter?.id === printer.id }"
+              @click="selectPrinter(printer)"
+            >
+              <div class="printer-info">
+                <div class="printer-name">{{ printer.name }}</div>
+                <div class="printer-details">
+                  <span class="printer-type">USB</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- No Printers Found -->
-        <div v-if="!isScanning && availablePrinters.length === 0 && !ipTestResult && scanAttempted" class="no-printers">
-          <p>No printers found. Please ensure your printer is:</p>
-          <ul>
-            <li v-if="connectionType === 'bluetooth'">Powered on and in pairing mode</li>
-            <li v-if="connectionType === 'usb'">Connected via USB cable</li>
-            <li v-if="connectionType === 'ip'">Connected to the same network</li>
-            <li>Compatible with your device</li>
-          </ul>
-        </div>
-
-        <!-- Error Message -->
-        <div v-if="errorMessage" class="error-message">
-          {{ errorMessage }}
+        <!-- Configuration Options -->
+        <div v-if="selectedPrinter" class="config-section">
+          <h4>Printer Settings</h4>
+          
+          <div class="settings-grid">
+            <div class="form-group">
+              <label>Paper Width (characters):</label>
+              <select v-model.number="printerConfig.paperWidth">
+                <option value="32">32 characters (58mm)</option>
+                <option value="48">48 characters (80mm)</option>
+                <option value="64">64 characters (110mm)</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label>Encoding:</label>
+              <select v-model="printerConfig.encoding">
+                <option value="utf8">UTF-8</option>
+                <option value="ascii">ASCII</option>
+                <option value="cp1252">CP1252</option>
+              </select>
+            </div>
+            
+            <div v-if="connectionType !== 'bluetooth'" class="form-group">
+              <label>Baud Rate:</label>
+              <select v-model.number="printerConfig.baudRate">
+                <option value="9600">9600</option>
+                <option value="19200">19200</option>
+                <option value="38400">38400</option>
+                <option value="115200">115200</option>
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 
       <div class="modal-footer">
-        <button class="cancel-btn" @click="$emit('close')">Cancel</button>
+        <button class="cancel-btn" @click="closeModal">Cancel</button>
         <button 
-          class="configure-btn" 
+          class="configure-btn"
           @click="configurePrinter"
-          :disabled="!selectedPrinter"
+          :disabled="!selectedPrinter || isConfiguring"
         >
-          Configure Printer
+          <span v-if="isConfiguring" class="spinner-small"></span>
+          {{ isConfiguring ? 'Configuring...' : '✓ Configure Printer' }}
         </button>
+      </div>
+
+      <!-- Status Messages -->
+      <div v-if="statusMessage" class="status-message" :class="statusType">
+        {{ statusMessage }}
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
+import { scanBluetoothPrinters, testBluetoothConnection } from '../utils/bluetoothPrinter.js'
 
+// Props
 const props = defineProps({
   visible: Boolean,
   isScanning: Boolean,
@@ -178,89 +221,207 @@ const props = defineProps({
   connectionType: String
 })
 
+// Emits
 const emit = defineEmits([
-  'close', 
-  'scan-printers', 
-  'configure-printer', 
-  'update-connection-type', 
+  'close',
+  'scan-printers',
+  'configure-printer',
+  'update-connection-type',
   'select-printer',
   'test-ip-printer'
 ])
 
-const ipAddress = ref(null)
-const ipPort = ref(9100)
-const isTestingIP = ref(false)
-const ipTestResult = ref(null)
-const errorMessage = ref('')
-const scanAttempted = ref(false)
-const bluetoothSupported = ref(false)
-const usbSupported = ref(false)
-// const serialSupported = ref(false)
+// Reactive data
+const isScanning = ref(false)
+const testingPrinter = ref(null)
+const testingIP = ref(false)
+const isConfiguring = ref(false)
+const statusMessage = ref('')
+const statusType = ref('info')
 
-const displayPrinters = computed(() => {
-  if (ipTestResult.value) {
-    return [ipTestResult.value, ...props.availablePrinters]
-  }
-  return props.availablePrinters
+const selectedPrinter = ref(null)
+const connectionType = ref('bluetooth')
+
+const bluetoothPrinters = ref([])
+const usbPrinters = ref([])
+
+// Configuration objects
+const ipConfig = reactive({
+  address: '192.168.1.100',
+  port: 9100
 })
 
-// Check API support on component mount
-onMounted(() => {
-  bluetoothSupported.value = !!navigator.bluetooth && location.protocol === 'https:'
-  usbSupported.value = !!navigator.usb
-//   serialSupported.value = !!navigator.serial
-  
-  // Auto-select IP if Bluetooth is not supported
-  if (!bluetoothSupported.value && props.connectionType === 'bluetooth') {
-    emit('update-connection-type', 'ip')
-  }
+const printerConfig = reactive({
+  paperWidth: 48,
+  encoding: 'utf8',
+  baudRate: 9600
 })
 
-  
+// Connection types
+const connectionTypes = [
+  { id: 'bluetooth', name: 'Bluetooth', icon: '📱' },
+  { id: 'ip', name: 'Network (IP)', icon: '🌐' },
+  { id: 'usb', name: 'USB', icon: '🔌' }
+]
 
-const testIPConnection = async () => {
-  if (!ipAddress.value) return
-  
-  isTestingIP.value = true
-  errorMessage.value = ''
+// Methods
+const closeModal = () => {
+  emit('close')
+  clearStatus()
+}
+
+const selectConnectionType = (type) => {
+  connectionType.value = type
+  selectedPrinter.value = null
+  bluetoothPrinters.value = []
+  usbPrinters.value = []
+  clearStatus()
+  emit('update-connection-type', type)
+}
+
+const selectPrinter = (printer) => {
+  selectedPrinter.value = printer
+  emit('select-printer', printer)
+}
+
+const showStatus = (message, type = 'info') => {
+  statusMessage.value = message
+  statusType.value = type
+  setTimeout(() => {
+    clearStatus()
+  }, 5000)
+}
+
+const clearStatus = () => {
+  statusMessage.value = ''
+  statusType.value = 'info'
+}
+
+// Bluetooth methods
+const scanForBluetoothPrinters = async () => {
+  isScanning.value = true
+  bluetoothPrinters.value = []
+  clearStatus()
   
   try {
-    const result = await emit('test-ip-printer', ipAddress.value, ipPort.value)
-    ipTestResult.value = result
-    emit('select-printer', result)
+    const printer = await scanBluetoothPrinters()
+    bluetoothPrinters.value = [printer]
+    showStatus(`Found printer: ${printer.name}`, 'success')
   } catch (error) {
-    errorMessage.value = `Failed to connect to ${ipAddress.value}:${ipPort.value}. Please check the IP address and ensure the printer is accessible.`
-    ipTestResult.value = null
+    showStatus(error.message, 'error')
+    console.error('Bluetooth scan error:', error)
   } finally {
-    isTestingIP.value = false
+    isScanning.value = false
   }
 }
 
-const configurePrinter = () => {
-  if (!props.selectedPrinter) return
+const testBluetoothPrinter = async (printer) => {
+  testingPrinter.value = printer.id
   
-  const additionalConfig = {}
-  if (props.connectionType === 'ip') {
-    additionalConfig.address = ipAddress.value
-    additionalConfig.port = ipPort.value
+  try {
+    const result = await testBluetoothConnection(printer.device)
+    if (result.success) {
+      showStatus('Bluetooth connection test successful!', 'success')
+    } else {
+      showStatus(result.message, 'error')
+    }
+  } catch (error) {
+    showStatus(`Test failed: ${error.message}`, 'error')
+  } finally {
+    testingPrinter.value = null
   }
-  
-  emit('configure-printer', props.selectedPrinter, additionalConfig)
 }
 
-// Watch for scan attempts
-watch(() => props.isScanning, (newVal, oldVal) => {
-  if (oldVal && !newVal) {
-    scanAttempted.value = true
+// IP methods
+const testIPConnection = async () => {
+  testingIP.value = true
+  clearStatus()
+  
+  try {
+    const printer = await emit('test-ip-printer', ipConfig.address, ipConfig.port)
+    selectedPrinter.value = printer
+    showStatus('IP connection test successful!', 'success')
+  } catch (error) {
+    showStatus(`IP test failed: ${error.message}`, 'error')
+  } finally {
+    testingIP.value = false
   }
+}
+
+// USB methods
+const scanForUSBPrinters = async () => {
+  isScanning.value = true
+  usbPrinters.value = []
+  clearStatus()
+  
+  try {
+    if (!navigator.usb) {
+      throw new Error('Web USB not supported in this browser')
+    }
+    
+    const device = await navigator.usb.requestDevice({
+      filters: [
+        { classCode: 7 }, // Printer class
+        { vendorId: 0x04b8 }, // Epson
+        { vendorId: 0x0483 }  // Star
+      ]
+    })
+    
+    const printer = {
+      id: `usb_${device.serialNumber || Date.now()}`,
+      name: `${device.manufacturerName || 'Unknown'} ${device.productName || 'USB Printer'}`,
+      type: 'usb',
+      device: device
+    }
+    
+    usbPrinters.value = [printer]
+    showStatus(`Found USB printer: ${printer.name}`, 'success')
+    
+  } catch (error) {
+    if (error.name === 'NotFoundError') {
+      showStatus('No USB printer selected or found', 'warning')
+    } else {
+      showStatus(`USB scan failed: ${error.message}`, 'error')
+    }
+  } finally {
+    isScanning.value = false
+  }
+}
+
+// Configure printer
+const configurePrinter = async () => {
+  if (!selectedPrinter.value) return
+  
+  isConfiguring.value = true
+  clearStatus()
+  
+  try {
+    const config = {
+      ...printerConfig,
+      ...(connectionType.value === 'ip' ? ipConfig : {})
+    }
+    
+    await emit('configure-printer', selectedPrinter.value, config)
+    showStatus('Printer configured successfully!', 'success')
+    
+    setTimeout(() => {
+      closeModal()
+    }, 1500)
+    
+  } catch (error) {
+    showStatus(`Configuration failed: ${error.message}`, 'error')
+  } finally {
+    isConfiguring.value = false
+  }
+}
+
+// Watch for prop changes
+watch(() => props.connectionType, (newType) => {
+  connectionType.value = newType
 })
 
-// Reset state when connection type changes
-watch(() => props.connectionType, () => {
-  ipTestResult.value = null
-  errorMessage.value = ''
-  scanAttempted.value = false
-  emit('select-printer', null)
+watch(() => props.selectedPrinter, (newPrinter) => {
+  selectedPrinter.value = newPrinter
 })
 </script>
 

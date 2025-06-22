@@ -7,6 +7,12 @@ class ThermalPrinter {
     this.config = null
     this.isConnected = false
     this.paperWidth = 48 // Standard thermal printer width in characters
+    
+    // Bluetooth specific properties
+    this.bluetoothDevice = null
+    this.gattServer = null
+    this.printService = null
+    this.writeCharacteristic = null
   }
 
   // Initialize printer connection
@@ -70,17 +76,42 @@ class ThermalPrinter {
 
   // Bluetooth printer connection
   async connectToBluetoothPrinter(deviceId) {
-    return new Promise((resolve, reject) => {
-      // In a real implementation, you would use Web Bluetooth API
-      if ('bluetooth' in navigator) {
-        console.log(`Attempting Bluetooth connection to ${deviceId}`)
-        setTimeout(() => {
-          resolve()
-        }, 1200)
+    if (!navigator.bluetooth) {
+      throw new Error('Bluetooth not supported in this browser')
+    }
+
+    try {
+      // If device object is passed instead of just ID
+      if (this.printer.device) {
+        this.bluetoothDevice = this.printer.device
       } else {
-        reject(new Error('Bluetooth not supported in this browser'))
+        // Request device if not already available
+        this.bluetoothDevice = await navigator.bluetooth.requestDevice({
+          filters: [
+            { services: ['000018f0-0000-1000-8000-00805f9b34fb'] },
+            { namePrefix: 'POS' },
+            { namePrefix: 'Thermal' },
+            { namePrefix: 'Receipt' }
+          ],
+          optionalServices: ['battery_service']
+        })
       }
-    })
+
+      // Connect to GATT server
+      this.gattServer = await this.bluetoothDevice.gatt.connect()
+      
+      // Get the print service
+      this.printService = await this.gattServer.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb')
+      
+      // Get the write characteristic for sending print data
+      this.writeCharacteristic = await this.printService.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb')
+      
+      console.log(`Connected to Bluetooth printer: ${this.bluetoothDevice.name}`)
+      
+    } catch (error) {
+      console.error('Bluetooth connection failed:', error)
+      throw new Error(`Bluetooth connection failed: ${error.message}`)
+    }
   }
 
   // ESC/POS command builders
@@ -190,19 +221,103 @@ class ThermalPrinter {
       throw new Error('Printer not connected')
     }
 
-    return new Promise((resolve, reject) => {
-      // Simulate printing delay
-      const printTime = Math.random() * 2000 + 1000 // 1-3 seconds
+    try {
+      if (this.printer.type === 'bluetooth' && this.writeCharacteristic) {
+        await this.sendBluetoothData(data)
+      } else if (this.printer.type === 'ip') {
+        await this.sendNetworkData(data)
+      } else if (this.printer.type === 'usb') {
+        await this.sendUSBData(data)
+      } else {
+        // Fallback simulation
+        await this.simulatePrint(data)
+      }
       
-      setTimeout(() => {
-        const success = Math.random() > 0.1 // 90% success rate
+      console.log('Print job completed successfully')
+      
+    } catch (error) {
+      console.error('Print failed:', error)
+      throw new Error(`Print job failed: ${error.message}`)
+    }
+  }
+
+  // Send data via Bluetooth
+  async sendBluetoothData(data) {
+    if (!this.writeCharacteristic) {
+      throw new Error('Bluetooth characteristic not available')
+    }
+
+    try {
+      // Convert string to ArrayBuffer
+      const encoder = new TextEncoder()
+      const dataBuffer = encoder.encode(data)
+      
+      // Split data into chunks (Bluetooth has packet size limits)
+      const chunkSize = 20 // Most Bluetooth LE devices support 20 bytes per packet
+      
+      for (let i = 0; i < dataBuffer.length; i += chunkSize) {
+        const chunk = dataBuffer.slice(i, i + chunkSize)
+        await this.writeCharacteristic.writeValue(chunk)
         
+        // Small delay between chunks to prevent overwhelming the printer
+        await new Promise(resolve => setTimeout(resolve, 50))
+      }
+      
+    } catch (error) {
+      throw new Error(`Bluetooth write failed: ${error.message}`)
+    }
+  }
+
+  // Send data via Network/IP
+  async sendNetworkData(data) {
+    // For network printers, you would typically use WebSocket or fetch to a local server
+    // that handles the raw socket connection to the printer
+    return new Promise((resolve, reject) => {
+      // Simulate network printing
+      setTimeout(() => {
+        const success = Math.random() > 0.1
         if (success) {
-          console.log('Print job completed successfully')
-          console.log('Printed data:', data)
+          console.log('Network print completed')
           resolve()
         } else {
-          reject(new Error('Print job failed - check printer status'))
+          reject(new Error('Network print failed'))
+        }
+      }, 1500)
+    })
+  }
+
+  // Send data via USB
+  async sendUSBData(data) {
+    if (!navigator.usb) {
+      throw new Error('Web USB not supported')
+    }
+    
+    // USB implementation would go here
+    // This requires the printer to be connected via USB and proper device permissions
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        const success = Math.random() > 0.1
+        if (success) {
+          console.log('USB print completed')
+          resolve()
+        } else {
+          reject(new Error('USB print failed'))
+        }
+      }, 1000)
+    })
+  }
+
+  // Fallback simulation
+  async simulatePrint(data) {
+    return new Promise((resolve, reject) => {
+      const printTime = Math.random() * 2000 + 1000
+      setTimeout(() => {
+        const success = Math.random() > 0.1
+        if (success) {
+          console.log('Simulated print completed')
+          resolve()
+        } else {
+          reject(new Error('Simulated print failed'))
         }
       }, printTime)
     })
@@ -360,9 +475,18 @@ class ThermalPrinter {
 
   // Disconnect printer
   disconnect() {
+    // Disconnect Bluetooth if connected
+    if (this.bluetoothDevice && this.bluetoothDevice.gatt.connected) {
+      this.bluetoothDevice.gatt.disconnect()
+    }
+    
     this.printer = null
     this.config = null
     this.isConnected = false
+    this.bluetoothDevice = null
+    this.gattServer = null
+    this.printService = null
+    this.writeCharacteristic = null
   }
 
   // Get printer status
