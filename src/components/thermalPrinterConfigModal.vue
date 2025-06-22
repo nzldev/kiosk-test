@@ -1,3 +1,4 @@
+ <!-- components/thermalPrinterConfigModal.vue -->
 <template>
   <div v-if="visible" class="modal-overlay">
     <div class="modal-content">
