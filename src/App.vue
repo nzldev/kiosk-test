@@ -238,31 +238,64 @@ const selectPrinter = (printer) => {
   selectedPrinter.value = printer
 }
 
+// const scanPrinters = async () => {
+//   isScanning.value = true
+//   availablePrinters.value = []
+  
+//   try {
+//     // Simulate scanning based on connection type
+//     await new Promise(resolve => setTimeout(resolve, 2000))
+    
+//     if (connectionType.value === 'bluetooth') {
+//       availablePrinters.value = [
+//         { id: 'bt1', name: 'Thermal Printer BT', type: 'bluetooth', connected: false }
+//       ]
+//     } else if (connectionType.value === 'usb') {
+//       availablePrinters.value = [
+//         { id: 'usb1', name: 'USB Thermal Printer', type: 'usb', connected: false }
+//       ]
+//     }
+    
+//     showNotification(`Found ${availablePrinters.value.length} printer(s)`, 'success')
+//   } catch (error) {
+//     showNotification('Failed to scan for printers', 'error')
+//   } finally {
+//     isScanning.value = false
+//   }
+// }
+
+
+// Scan for printers based on connection type
 const scanPrinters = async () => {
   isScanning.value = true
   availablePrinters.value = []
   
   try {
-    // Simulate scanning based on connection type
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    let printers = []
     
     if (connectionType.value === 'bluetooth') {
-      availablePrinters.value = [
-        { id: 'bt1', name: 'Thermal Printer BT', type: 'bluetooth', connected: false }
-      ]
+      const printer = await scanBluetoothPrinters()
+      printers = [printer]
     } else if (connectionType.value === 'usb') {
-      availablePrinters.value = [
-        { id: 'usb1', name: 'USB Thermal Printer', type: 'usb', connected: false }
-      ]
+      const printer = await scanUSBPrinters()
+      printers = [printer]
+    } else if (connectionType.value === 'ip') {
+      // For IP, we'll need user input for IP address
+      // This is handled in the modal component
+      return
     }
     
+    availablePrinters.value = printers
     showNotification(`Found ${availablePrinters.value.length} printer(s)`, 'success')
   } catch (error) {
     showNotification('Failed to scan for printers', 'error')
+    console.error('Printer scan failed:', error)
+    // Show error message to user
   } finally {
     isScanning.value = false
   }
 }
+
 
 const testIPPrinter = async (address, port) => {
   return new Promise((resolve, reject) => {
